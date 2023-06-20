@@ -7,11 +7,9 @@ output: pdf_document
 
 ## Personal Introduction
 
-My name is Matthew Sheridan, I'm a recent college graduate, and this is my quick, rough way of putting who I am on paper. 
+My name is Matthew Sheridan, I'm a recent college graduate, and this is my quick, rough way of putting who I am on paper.
 
 To begin, I'll reveal a little about myself - I'm two things: a sports nerd and just the right amount of crazy. My sports analytics origins lie in Ice Hockey, where I became well versed to the point where I could help during Harvard's Sports Analysis Collective's discussions, and I'd consider myself to be just as much of a hockey nerd. I can code pretty well, I learn on the fly, and most importantly, I'm a confident, bold individual who knows that their best trait is asking as many questions as humanely possible. 
-
-To get to the point, however, I'd like to showcase to you both how I think and my still growing ability to code, and in that case I'll be using R to give my take on a novel 'Clutch' metric for NFL wide receivers from 2022. 
 
 Now this is obviously a rough metric, with MANY assumptions made. I've sparingly worked with NFL pbp data before, so not only is this a showing of my abilities, it's also an exemplification of a journey from knowing little to being more comfortable and familiar.
 

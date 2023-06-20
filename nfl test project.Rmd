@@ -1,0 +1,431 @@
+---
+title: "Generating a novel 'Clutch' metric for NFL wide receivers in the 2022 season"
+author: "Matt Sheridan"
+date: "2023-06-16"
+output: pdf_document
+---
+
+## Personal Introduction
+
+My name is Matthew Sheridan, I'm a recent college graduate, and this is my quick, rough way of putting who I am on paper. 
+
+To begin, I'll reveal a little about myself - I'm two things: a sports nerd and just the right amount of crazy. My sports analytics origins lie in Ice Hockey, where I became well versed to the point where I could help during Harvard's Sports Analysis Collective's discussions, and I'd consider myself to be just as much of a hockey nerd. I can code pretty well, I learn on the fly, and most importantly, I'm a confident, bold individual who knows that their best trait is asking as many questions as humanely possible. 
+
+To get to the point, however, I'd like to showcase to you both how I think and my still growing ability to code, and in that case I'll be using R to give my take on a novel 'Clutch' metric for NFL wide receivers from 2022. 
+
+Now this is obviously a rough metric, with MANY assumptions made. I've sparingly worked with NFL pbp data before, so not only is this a showing of my abilities, it's also an exemplification of a journey from knowing little to being more comfortable and familiar.
+
+If you have any further questions, I can be reached at 617-529-2271 or matthewsheridan3627\@gmail.com
+
+## Project Introduction
+
+Wide receivers...are weird. It is quite hard to isolate the impact that an individual receiver has over another because so many factors are different between all of them. Quarterback play, head coach, offensive schemes, opposing corner backs, and many, many more factors are difficult to be isolated with limited resources and computing power. 
+
+To evaluate how 'clutch' a receiver is, I want to use two statistics: separation and yards after the catch. 
+
+The first large assumption I'll be making is that yards after the catch are one of the most important things receivers can affect individually. This is a large jump, because individual skill contributes a lot to actually getting to a spot to make the catch, but the actual throw is arguably just as crucial. Thus, since a receiver-defender(s) matchup will define the YAC, using the YAC win probability added metric will be a good proxy for actual receiver outcome (considering WPA is a good baseline for evaluating how 'clutch' or important a play is). 
+
+Now that that's out of the way, the basis for the project is being able to take the win probability added from YAC and provide in game context for it - that is it say, how important is the game in which a receiver is playing in. A game where the receiver's team has a 40% chance of making the playoffs at, say 6 and 6, is far, far more important than one at say, 14-2, where the team is already in the playoffs and what happens doesn't really affect the team's outcome. 
+
+Then, we also want to evaluate the separation a receiver is able to get on average, adding that in as a way to quantify how good their route running is. 
+
+Thus, we are evaluating two of the most major parts of a receiver - how good they are at getting open, and what they do once the ball is thrown at them. 
+
+With player tracking data, we would be able to further evaluate more advanced things, such as double coverage, speed, etc, however considering that all I currently have access to is a summary of nextgen stats and play by play data, that is a future endeavor.
+
+Ultimately, I intend for this project to showcase the way that I think, my ability to code, and hopefully provide a fun new way to at least think about receivers. Whether the actual statistic is evaluative or would hold up over time is certainly a concern, but for someone who has basically never worked with the pbp/nextgen data before, this is a start. 
+## Data / Tools
+
+In 
+
+
+```{r, warning = F, message = F}
+library(tidyverse)
+library(ggrepel)
+library(nflreadr)
+library(nflplotR)
+library(coefplot)
+library(dplyr)
+library(rvest)
+options(scipen=9999)
+```
+```{r}
+playoff_probs <- (matrix(c(0.44, 0.32, 0.22, 0.14, 0.08,0.04,0.02,0.01,0,0,0,0,0,0,0,0,0,0,
+                        0.55,0.43,0.32,0.21,0.13,0.07,0.03,0.01,0,0,0,0,0,0,0,0,0,0,
+                        0.67,0.55,0.42,0.3,0.2,0.11,0.06,0.02,0.01,0,0,0,0,0,0,0,0,0,
+                        0.76,0.67,0.55,0.42,0.29,0.18,0.1,0.04,0.01,0,0,0,0,0,0,0,0,0,
+                        0.85,0.77,0.67,0.54,0.41,0.28,0.16,0.08,0.03,0.01,0,0,0,0,0,0,0,0,
+                        0.91,0.85,0.77,0.67,0.54,0.39,0.25,0.13,0.05,0.01,0,0,0,0,0,0,0,0,
+                        0.95,0.92,0.87,0.78,0.67,0.53,0.37,0.22,0.09,0.03,0,0,0,0,0,0,0,0,
+                        0.98,0.96,0.93,0.88,0.8,0.69,0.53,0.34,0.17,0.04,0.01,0,0,0,0,0,0,0,
+                        0.99,0.98,0.97,0.95,0.9,0.82,0.7,0.52,0.28,0.11,0,0,0,0,0,0,0,0,
+                        1,1,0.99,0.98,0.96,0.93,0.86,0.74,0.5,0,0,0,0,0,0,0,0,0,
+                        1,1,1,1,0.99,0.98,0.97,0.91,0,0,0,0,0,0,0,0,0,0,
+                        1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,
+                        1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+                        1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                        1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                        1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                        1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                        1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+                        nrow = 18, ncol = 18))
+
+rownames(playoff_probs) <- 0:17
+colnames(playoff_probs) <- 0:17
+
+payoff_function <- function(x){
+#  ifelse(x > 0.5, (1.5 - x + 0.5)^2, (x + 1)^2)
+  -4*((x-0.5)^2) + 1 
+}
+
+playoff_probs
+
+plot(seq(0,1,by = 0.01), payoff_function(seq(0,1,by = 0.01)),
+     main = "Payoff function values per playoff probability",
+     xlab = 'playoff probability',
+     ylab = 'extra percent boost to yac_wpa')
+
+```
+
+```{r}
+
+get_wr_data <- function(YEARS){
+  
+  schedule <- filter(load_schedules(seasons = 2022), game_type == "REG")
+  
+  rolling_wins <- matrix(nrow = 32, ncol = 18)
+  
+  teams <- sort(unique(schedule$away_team))  
+  
+  for (i in 1:32){
+  cur_team <- teams[i]
+    for (j in 1:18){
+      rolling_wins[i,j] <- ifelse(j == 1, 0, rolling_wins[i,j-1] )
+      tmp <- filter(schedule, (home_team == cur_team) | away_team == cur_team, week == j-1)
+    
+      if (nrow(tmp) != 0){
+        if (tmp$away_team[1] == cur_team){
+            rolling_wins[i,j] <- ifelse(j>1, 
+                                        (1 * (tmp$result[1] < 0)) + rolling_wins[i,(j-1)], 
+                                        0)
+        }
+        else if (tmp$home_team[1] == cur_team){
+           rolling_wins[i,j] <- ifelse(j>1, 
+                                        (1 * (tmp$result[1] > 0)) + rolling_wins[i,(j-1)], 
+                                        0)
+        }
+                
+      }
+    }
+  }
+  
+  rolling_wins <- as.data.frame(rolling_wins)
+  rownames(rolling_wins) <- teams
+  colnames(rolling_wins) <- 1:18
+
+  
+  data = load_pbp(YEARS)
+  data <- data %>%
+    left_join(load_teams(), by = c('posteam' = 'team_abbr'))
+
+  contracts_with_id <- filter(load_contracts(), is_active == T) %>% inner_join(load_players()[,c('gsis_id', 'display_name', 'position')], by = join_by(player == display_name, position == position))
+  
+  nextgen <- filter(load_nextgen_stats(seasons = YEARS,stat_type = c("receiving"),
+                     file_type = getOption("nflreadr.prefer", default = "rds")), week == 0)
+  
+  #Assessing WPA by receiver
+  
+  passes <- filter(data, pass_attempt == 1, season_type == "REG", !is.na(yards_after_catch))
+  
+  i <- cbind(match(passes$posteam, rownames(rolling_wins)), 
+        match(passes$week, colnames(rolling_wins)))
+  
+  passes <- cbind(rolling_win_ct = rolling_wins[i], passes)
+  
+  i <- cbind(match(passes$week - 1 - passes$rolling_win_ct, rownames(playoff_probs)), 
+        match(passes$rolling_win_ct, colnames(playoff_probs)))
+  
+  passes <- cbind(playoff_prob = playoff_probs[i],passes)
+  
+  pass_counts <- passes %>% count(receiver_player_name, posteam, receiver_player_id, team_color)
+  
+#  avg_wpa_wrs <- setNames(aggregate(wpa ~ receiver_player_name + posteam + receiver_player_id, data = passes, FUN = mean), c("receiver_player_name", "posteam", "receiver_player_id", "wpa"))
+  
+  avg_epa_wrs <- aggregate(epa ~ receiver_player_name + posteam + receiver_player_id, data = passes, FUN = mean)
+  
+#  tot_epa_wrs <- aggregate(epa ~ receiver_player_name + posteam + receiver_player_id, data = passes, FUN = sum)
+  
+#  colnames(tot_epa_wrs)[4] = "tot_epa"
+  
+#  avg_cpoe_wrs <- aggregate(cpoe ~ receiver_player_name + posteam + receiver_player_id, data = passes, FUN = mean)
+  
+  passes$w_yac_wpa <- passes$yac_wpa * (1+payoff_function(passes$playoff_prob))
+  
+  
+  avg_w_yacwpa_wrs <- setNames(aggregate(w_yac_wpa ~ receiver_player_name + posteam + receiver_player_id, data = passes, FUN = mean), c("receiver_player_name", "posteam", "receiver_player_id", "w_yac_wpa"))
+  
+  avg_uw_yacwpa_wrs <- setNames(aggregate(yac_wpa ~ receiver_player_name + posteam + receiver_player_id, data = passes, FUN = mean), c("receiver_player_name", "posteam", "receiver_player_id", "uw_yac_wpa"))
+  
+#  avg_yac_wrs <- aggregate(yards_after_catch ~ receiver_player_name + posteam + receiver_player_id, data = passes, FUN = sum)
+  
+#  wr_data <- avg_wpa_wrs %>% merge(pass_counts, keep=F) %>% merge(avg_epa_wrs, keep=F) %>% merge(avg_cpoe_wrs, keep=F) %>% merge(avg_yacwpa_wrs, keep=F) %>% merge(avg_yac_wrs, keep=F) %>% merge(tot_epa_wrs, keep=F)
+  
+    wr_data <- avg_epa_wrs %>% merge(pass_counts, keep=F) %>% merge(avg_w_yacwpa_wrs, keep=F) %>% merge(avg_uw_yacwpa_wrs, keep=F)
+  
+  team_pa <- aggregate(n~posteam, data = wr_data, FUN=sum)
+  
+  wr_data <- wr_data %>% merge(team_pa, by='posteam', suffixes = c("_player", "_team"))
+  
+  wr_data <- wr_data %>% inner_join(contracts_with_id, by = join_by(receiver_player_id == gsis_id))
+  
+  #wr_data <- filter(wr_data, n_player>50)
+  
+  ng_wr_clean <- wr_data %>% inner_join(nextgen, by = join_by(receiver_player_id==player_gsis_id))
+  
+  return(ng_wr_clean)
+}
+
+data_2022 = get_wr_data(2022)
+data_2021 = get_wr_data(2021)
+data_2020 = get_wr_data(2020)
+```
+
+
+
+```{r}
+df <- data.frame(x2=rnorm(100),y2=rnorm(100))
+
+annotations <- data.frame(
+        xpos = c(-Inf,-Inf,Inf,Inf),
+        ypos =  c(-Inf, Inf,-Inf,Inf),
+        annotateText = c("Bad","Efficient"
+                        ,"Stop Throwing","Go-To"),
+        hjustvar = c(0,0,1,1) ,
+        vjustvar = c(-2,1,-1,1)) #<- adjust
+
+data_2022 %>%
+  ggplot(aes(y = w_yac_wpa, x = epa)) +
+  #horizontal line with mean EPA
+  geom_hline(yintercept = mean(data_2022$w_yac_wpa), color = "red", linetype = "dashed", alpha=0.5) +
+  #vertical line with mean CPOE
+  geom_vline(xintercept =  mean(data_2022$epa), color = "red", linetype = "dashed", alpha=0.5) +
+  geom_hline(yintercept = 0, color = "green", linetype = "solid", alpha=0.5) +
+  #vertical line with mean CPOE
+  geom_vline(xintercept =  0, color = "green", linetype = "solid", alpha=0.5) +
+  #add points for the QBs with the right colors
+  #cex controls point size and alpha the transparency (alpha = 1 is normal)
+  geom_point(color = data_2022$team_color, cex=data_2022$apy / mean(data_2022$apy), alpha = .6) +
+  #add names using ggrepel, which tries to make them not overlap
+  geom_text_repel(aes(label=player), max.overlaps = 12) +
+  #add a smooth line fitting wpa + epa
+  stat_smooth(geom='line', alpha=0.5, se=FALSE, method='gam')+
+  #titles and caption
+  labs(x = "Average EPA per target",
+       y = "Average Weighted YAC WPA per target",
+       title = "WR Clutch vs. Good",
+       caption = "Data: @nflfastR") +
+  #uses the black and white ggplot theme
+  theme_bw() +
+  #center title with hjust = 0.5
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5, face = "bold")
+  ) +
+  #make ticks look nice
+  #if this doesn't work, `install.packages('scales')`
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  geom_text(data=annotations,aes(x=xpos,y=ypos,hjust=hjustvar,vjust=vjustvar,label=annotateText), color = "tomato")
+
+```
+
+```{r}
+
+data_2022$clutch <- scale(data_2022$w_yac_wpa) +
+  scale(data_2022$avg_separation)
+
+data_2021$clutch <- scale(data_2021$w_yac_wpa) +
+  scale(data_2021$avg_separation)
+
+data_2020$clutch <- scale(data_2020$w_yac_wpa) +
+  scale(data_2020$avg_separation)
+
+cor(data_2022[, colnames(data_2022) %in% c("w_yac_wpa", "avg_separation")])
+
+dta <- data_2022 %>% 
+  inner_join(data_2021, by = join_by(receiver_player_id), suffix = c("_22", "_21")) %>% 
+  inner_join(data_2020, by = join_by(receiver_player_id), suffix = c("", "_20"))
+
+cor(dta$clutch_22, dta$clutch_21)
+cor(dta$clutch_21, dta$clutch)
+cor(dta$clutch_22, dta$clutch)
+
+```
+
+
+```{r}
+
+
+df <- data.frame(x2=rnorm(100),y2=rnorm(100))
+
+annotations <- data.frame(
+        xpos = c(-Inf,-Inf,Inf,Inf),
+        ypos =  c(-Inf, Inf,-Inf,Inf),
+        annotateText = c("Bad","Fun"
+                        ,"Inefficient","Clutch"),
+        hjustvar = c(0,0,1,1) ,
+        vjustvar = c(0,1,0,1)) #<- adjust
+
+plot_clutch <- function(dataframe, yr){
+  dataframe %>%
+    ggplot(aes(y = clutch, x = targets)) +
+    #horizontal line with mean EPA
+    geom_hline(yintercept = mean(dataframe$clutch), color = "red", linetype = "dashed", alpha=0.5) +
+    #vertical line with mean CPOE
+    geom_vline(xintercept =  mean(dataframe$targets), color = "red", linetype = "dashed", alpha=0.5) +
+    geom_hline(yintercept = 0, color = "green", linetype = "solid", alpha=0.5) +
+    #vertical line with mean CPOE
+    geom_vline(xintercept =  40, color = "green", linetype = "solid", alpha=0.5) +
+    #add points for the QBs with the right colors
+    #cex controls point size and alpha the transparency (alpha = 1 is normal)
+    geom_point(color = dataframe$team_color, cex=dataframe$value / median(dataframe$value), alpha = .6) +
+    #add names using ggrepel, which tries to make them not overlap
+    geom_text_repel(aes(label=player), max.overlaps = 5) +
+    #add a smooth line fitting wpa + epa
+    stat_smooth(geom='line', alpha=0.5, se=FALSE, method='lm')+
+    geom_abline(slope = -.05, intercept = (15:-5), alpha = .25)+
+    #titles and caption
+    labs(x = "Targets",
+         y = "Clutch factor",
+         title = paste("WR Clutch", yr),
+         caption = "Data: @nflfastR") +
+    #uses the black and white ggplot theme
+    theme_bw() +
+    #center title with hjust = 0.5
+    theme(
+      plot.title = element_text(size = 14, hjust = 0.5, face = "bold")
+    ) +
+    #make ticks look nice
+    #if this doesn't work, `install.packages('scales')`
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_text(data=annotations,aes(x=xpos,y=ypos,hjust=hjustvar,vjust=vjustvar,label=annotateText), color = "tomato")
+}
+
+plot_clutch(data_2020, "2020")
+
+plot_clutch(data_2021, "2021")
+
+plot_clutch(data_2022, "2022")
+```
+
+
+```{r}
+
+dta[,colnames(dta) %in% c("w_yac_wpa_22", "uw_yac_wpa_22",
+                              "uw_yac_wpa_21", "w_yac_wpa_21",
+                              "uw_yac_wpa", "w_yac_wpa")] <-scale(dta[,colnames(dta) %in% c("w_yac_wpa_22", "uw_yac_wpa_22",
+                              "uw_yac_wpa_21", "w_yac_wpa_21",
+                              "uw_yac_wpa", "w_yac_wpa")])
+plot(uw_yac_wpa_22~uw_yac_wpa_21, dta, col = 'blue')
+points(w_yac_wpa_22~w_yac_wpa_21, dta, col = 'red')
+
+cor(dta$uw_yac_wpa_22,dta$uw_yac_wpa_21)
+cor(dta$w_yac_wpa_22,dta$w_yac_wpa_21)
+
+plot(uw_yac_wpa_22~uw_yac_wpa, dta, col = 'blue')
+points(w_yac_wpa_22~w_yac_wpa, dta, col = 'red')
+
+cor(dta$uw_yac_wpa_22,dta$uw_yac_wpa)
+cor(dta$w_yac_wpa_22,dta$w_yac_wpa)
+
+plot(uw_yac_wpa_21~uw_yac_wpa, dta, col = 'blue')
+points(w_yac_wpa_21~w_yac_wpa, dta, col = 'red')
+
+cor(dta$uw_yac_wpa_21,dta$uw_yac_wpa)
+cor(dta$w_yac_wpa_21,dta$w_yac_wpa)
+
+cor(dta[,colnames(dta) %in% c("w_yac_wpa_22", "uw_yac_wpa_22",
+                              "uw_yac_wpa_21", "w_yac_wpa_21",
+                              "uw_yac_wpa", "w_yac_wpa")])
+
+data_2022[order(data_2022$w_yac_wpa, decreasing = T),
+          colnames(data_2022) %in% c("posteam", "receiver_player_name", "uw_yac_wpa", "w_yac_wpa")]
+```
+
+
+```{r, eval = F}
+
+dta <- clutch_2022 %>% 
+  inner_join(clutch_2021, by = join_by(receiver_player_id), suffix = c("_22", "_21")) %>% 
+  inner_join(clutch_2020, by = join_by(receiver_player_id), suffix = c("", "_20"))
+
+plot(clutch_22~clutch_21, dta)
+
+cor(dta$clutch_22, dta$clutch_21)
+
+plot(clutch_21~clutch, dta)
+
+cor(dta$clutch_21, dta$clutch)
+
+plot(clutch_22~clutch, dta)
+
+cor(dta$clutch_22, dta$clutch)
+
+```
+
+
+```{r}
+
+df <- data.frame(x2=rnorm(100),y2=rnorm(100))
+
+annotations <- data.frame(
+        xpos = c(-Inf,-Inf,Inf,Inf),
+        ypos =  c(-Inf, Inf,-Inf,Inf),
+        annotateText = c("Bad","Fun"
+                        ,"Inefficient","Clutch"),
+        hjustvar = c(0,0,1,1) ,
+        vjustvar = c(0,1,0,1)) #<- adjust
+
+plot_clutch <- function(dataframe, yr){
+  dataframe %>%
+    ggplot(aes(y = clutch, x = targets)) +
+    #horizontal line with mean EPA
+    geom_hline(yintercept = mean(dataframe$clutch), color = "red", linetype = "dashed", alpha=0.5) +
+    #vertical line with mean CPOE
+    geom_vline(xintercept =  mean(dataframe$targets), color = "red", linetype = "dashed", alpha=0.5) +
+    geom_hline(yintercept = 0, color = "green", linetype = "solid", alpha=0.5) +
+    #vertical line with mean CPOE
+    geom_vline(xintercept =  40, color = "green", linetype = "solid", alpha=0.5) +
+    #add points for the QBs with the right colors
+    #cex controls point size and alpha the transparency (alpha = 1 is normal)
+    geom_point(color = dataframe$team_color, cex=dataframe$value / median(dataframe$value), alpha = .6) +
+    #add names using ggrepel, which tries to make them not overlap
+    geom_text_repel(aes(label=player), max.overlaps = 7) +
+    #add a smooth line fitting wpa + epa
+    stat_smooth(geom='line', alpha=0.5, se=FALSE, method='lm')+
+    geom_abline(slope = -.05, intercept = (15:-5), alpha = .25)+
+    #titles and caption
+    labs(x = "Targets",
+         y = "Clutch factor",
+         title = paste("WR Clutch", yr),
+         caption = "Data: @nflfastR") +
+    #uses the black and white ggplot theme
+    theme_bw() +
+    #center title with hjust = 0.5
+    theme(
+      plot.title = element_text(size = 14, hjust = 0.5, face = "bold")
+    ) +
+    #make ticks look nice
+    #if this doesn't work, `install.packages('scales')`
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_text(data=annotations,aes(x=xpos,y=ypos,hjust=hjustvar,vjust=vjustvar,label=annotateText), color = "tomato")
+}
+
+plot_clutch(data_2020, "2020")
+
+plot_clutch(data_2021, "2021")
+
+plot_clutch(data_2022, "2022")
+
+```

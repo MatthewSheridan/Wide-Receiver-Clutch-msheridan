@@ -9,8 +9,6 @@ output: pdf_document
 
 My name is Matthew Sheridan, I'm a recent college graduate, and this is my quick, rough way of putting who I am on paper.
 
-To begin, I'll reveal a little about myself - I'm two things: a sports nerd and just the right amount of crazy. My sports analytics origins lie in Ice Hockey, where I became well versed to the point where I could help during Harvard's Sports Analysis Collective's discussions, and I'd consider myself to be just as much of a hockey nerd. I can code pretty well, I learn on the fly, and most importantly, I'm a confident, bold individual who knows that their best trait is asking as many questions as humanely possible. 
-
 Now this is obviously a rough metric, with MANY assumptions made. I've sparingly worked with NFL pbp data before, so not only is this a showing of my abilities, it's also an exemplification of a journey from knowing little to being more comfortable and familiar.
 
 If you have any further questions, I can be reached at 617-529-2271 or matthewsheridan3627\@gmail.com
@@ -34,7 +32,13 @@ With player tracking data, we would be able to further evaluate more advanced th
 Ultimately, I intend for this project to showcase the way that I think, my ability to code, and hopefully provide a fun new way to at least think about receivers. Whether the actual statistic is evaluative or would hold up over time is certainly a concern, but for someone who has basically never worked with the pbp/nextgen data before, this is a start. 
 ## Data / Tools
 
-In 
+In this analysis, we will be weighting YAC WPA by a function depending on the team's rough playoff probability in a specific game. For example, if the Dolphins are 3-3 and heave a 42% chance of making the playoffs, then Tyreek Hill breaking 3 tackles for a 55 yard touchdown and adding, say, 9 percent win probability to his team is ultimately more clutch than, say, Darnell Mooney doing the exact same thing but for the 1-5 bears. This relies on the assumption that the players are aware of the pressure that is on them and that they know something about how if they improve to 4-3, their playoff chances are far higher. 
+
+Therefore, we will be using this chart to determine playoff probabilities, as it is a bit beyond my current scope to be able to incorporate every factor of playoff probability:
+
+![Playoff Probabilities by Record](playoffpercentages-1.jpg)
+
+\newpage
 
 
 ```{r, warning = F, message = F}
@@ -47,6 +51,7 @@ library(dplyr)
 library(rvest)
 options(scipen=9999)
 ```
+
 ```{r}
 playoff_probs <- (matrix(c(0.44, 0.32, 0.22, 0.14, 0.08,0.04,0.02,0.01,0,0,0,0,0,0,0,0,0,0,
                         0.55,0.43,0.32,0.21,0.13,0.07,0.03,0.01,0,0,0,0,0,0,0,0,0,0,
